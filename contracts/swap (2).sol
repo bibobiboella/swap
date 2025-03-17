@@ -15,17 +15,20 @@ import { BaseMath } from "./protocol/lib/BaseMath.sol";
 
 /**
  * @title BTCETHPerpetualSwap
- * @author Based on dYdX Trading Inc.
+ * @author Ella Yan Based on dYdX Trading Inc.
  *
  * @notice A perpetual swap contract for BTC-ETH trading
  */
 contract BTCETHPerpetualSwap {
+    //imports
     using SafeMath for uint256;
     using BaseMath for uint256;
 
     // ============ Constants ============
 
     // Minimum collateral ratio required (150%)
+    // the lowest amount of collateral that traders 
+    //need to keep their perpetual position active
     uint256 public constant MINIMUM_COLLATERAL_RATIO = 15e16;
     
     // Liquidation fee percentage (5%)
@@ -51,7 +54,7 @@ contract BTCETHPerpetualSwap {
     // Track funding indexes per user
     mapping(address => uint256) public userFundingIndexes;
     
-    // Total open interest
+    // Total open positions
     uint256 public totalLongPositions;
     uint256 public totalShortPositions;
     
@@ -88,7 +91,9 @@ contract BTCETHPerpetualSwap {
         uint256 margin,
         uint256 pnl
     );
-    
+    //traders are required to hold a 3% maintenance margin. 
+    //If the collateral in a trader’s account falls below the 3% threshold, 
+    //they lose their entire position (liquidation)
     event PositionLiquidated(
         address indexed trader,
         address indexed liquidator,
@@ -183,7 +188,8 @@ contract BTCETHPerpetualSwap {
         P1Types.Balance storage balance = balances[msg.sender];
         
         // Apply funding to user
-        applyFunding(balance);
+        //applyFunding(balance);
+        applyFunding(balance, msg.sender);
         
         // Add margin
         P1BalanceMath.addToMargin(balance, marginAmount);
@@ -265,7 +271,8 @@ contract BTCETHPerpetualSwap {
         );
         
         // Apply funding to user
-        applyFunding(balance);
+        //applyFunding(balance);
+        applyFunding(balance, msg.sender);
         
         // Calculate P&L
         uint256 entryPrice = balance.margin;
@@ -346,7 +353,8 @@ contract BTCETHPerpetualSwap {
         );
         
         // Apply funding to trader
-        applyFunding(balance);
+        //applyFunding(balance);
+        applyFunding(balance, msg.sender);
         
         // Calculate liquidation fee
         uint256 notionalValue = BaseMath.baseMul(balance.position, price);
@@ -406,7 +414,8 @@ contract BTCETHPerpetualSwap {
         P1Types.Balance storage balance = balances[msg.sender];
         
         // Apply funding to user
-        applyFunding(balance);
+        //applyFunding(balance);
+        applyFunding(balance, msg.sender);
         
         // Transfer margin from user
         require(
@@ -443,7 +452,8 @@ contract BTCETHPerpetualSwap {
         P1Types.Balance storage balance = balances[msg.sender];
         
         // Apply funding to user
-        applyFunding(balance);
+        //applyFunding(balance);
+        applyFunding(balance, msg.sender);
         
         require(
             marginAmount <= balance.margin,
@@ -735,17 +745,17 @@ contract BTCETHPerpetualSwap {
         }
     }
     
-    /**
+/**
  * @notice Apply funding to a user's position
  * @param balance User's balance
+ * @param user The address of the user who owns the balance
  */
 function applyFunding(
-    P1Types.Balance storage balance
+    P1Types.Balance storage balance,
+    address user
 )
     internal
-{
-    address user = msg.sender;
-    
+{    
     if (balance.position == 0 || userFundingIndexes[user] == cumulativeFundingRate.value) {
         // No position or already up to date
         userFundingIndexes[user] = cumulativeFundingRate.value;
@@ -779,5 +789,33 @@ function applyFunding(
     
     // Update funding index
     userFundingIndexes[user] = cumulativeFundingRate.value;
+}
+
+
+// 添加一个简单的测试函数，绕过大部分复杂逻辑
+function testAddPosition(address user, uint256 amount, bool isLong) public {
+    P1Types.Balance storage balance = balances[user];
+    if (isLong) {
+        P1BalanceMath.addToPosition(balance, amount);
+        totalLongPositions = totalLongPositions.add(amount);
+    } else {
+        P1BalanceMath.addToPosition(balance, amount);
+        totalShortPositions = totalShortPositions.add(amount);
+    }
+    balance.positionIsPositive = isLong;
+}
+
+/**
+ * @notice Test function to check token allowance
+ * @param user The address to check allowance for
+ * @return allowanceAmount The amount of tokens the contract is allowed to spend
+ */
+ // 检查您是否已经授权合约使用您的代币
+function checkAllowance(address user) 
+    public 
+    view 
+    returns (uint256 allowanceAmount) 
+{
+    return marginToken.allowance(user, address(this));
 }
 }
